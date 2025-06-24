@@ -1,0 +1,13 @@
+# iOS (Xcode)
+ios-app/DerivedData/
+ios-app/*.xcworkspace
+ios-app/*.xcodeproj/project.xcworkspace/
+ios-app/Pods/
+ios-app/*.xcuserstate
+
+# Node/Web
+web-panel/node_modules/
+web-panel/dist/
+
+# macOS
+.DS_Store

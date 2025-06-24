@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Nom de ton app (exemple) -->
+    <key>CFBundleName</key>
+    <string>Cambrai Newsletters</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.arka.cambrai</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>fr</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.7.0</string>
+    <key>CFBundleVersion</key>
+    <string>70</string>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <true/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Default Configuration</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
+
+    <!-- Background fetch & tasks -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>processing</string>
+        <string>remote-notification</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.arka.cambrai.fetchAnnonces</string>
+    </array>
+
+    <!-- Permissions calendrier & rappels -->
+    <key>NSCalendarsUsageDescription</key>
+    <string>Cette application a besoin d’accéder à votre calendrier pour ajouter des rappels.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Cette application a besoin d’accéder à votre calendrier pour ajouter des rappels.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Cette application a besoin d’accéder à vos rappels pour ajouter des rappels.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Cette application a besoin d’accéder à vos rappels pour ajouter des rappels.</string>
+
+    <!-- Notifications (optionnel mais recommandé) -->
+    <key>NSUserNotificationAlertStyle</key>
+    <string>alert</string>
+
+    <!-- Autres clés si tu en as (ajoute ici si besoin, exemple) -->
+    <!--
+    <key>CFBundleDisplayName</key>
+    <string>Cambrai Newsletters</string>
+    -->
+</dict>
+</plist>

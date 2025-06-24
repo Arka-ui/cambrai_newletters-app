@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Gestion des Annonces</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .drag-active { border: 2px dashed #67e8f9 !important; background-color: #164e63 !important; }
+    .modal-bg { background: rgba(0,0,0,0.6); }
+    .yt-link { color: #FF5757; text-decoration: underline; font-weight: 600; }
+    .yt-link:hover { color: #fff; background: #ff5757; border-radius: 6px; transition: 0.2s; padding: 2px 6px; }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center">
+  <div class="w-full max-w-4xl mt-10">
+    <h1 class="text-4xl font-extrabold mb-6 text-center text-cyan-400">Création & Gestion d'Annonces</h1>
+    <!-- === Formulaire de création === -->
+    <form id="annonce-form" class="flex flex-col gap-3 bg-gray-800 p-6 rounded-2xl mb-8 shadow-lg relative" enctype="multipart/form-data" autocomplete="off">
+      <div class="flex gap-4 items-center">
+        <input required id="titre" name="titre" placeholder="Titre de l'annonce"
+          class="flex-1 p-3 rounded-lg text-black font-bold text-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+        <button class="bg-gradient-to-r from-cyan-500 to-emerald-400 px-6 py-2 rounded-xl font-bold hover:scale-105 transition shadow">
+          Créer
+        </button>
+      </div>
+      <input id="adresse" name="adresse" placeholder="Adresse liée à l'annonce (optionnel)"
+        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+      <input id="youtube" name="youtube" placeholder="Lien YouTube (optionnel, ex: https://youtu.be/xxxx)"
+        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-red-400" />
+      <textarea required id="contenu" name="contenu" placeholder="Contenu de l'annonce"
+        class="rounded-lg p-3 text-black min-h-[70px] resize-y focus:outline-none focus:ring-2 focus:ring-cyan-400"></textarea>
+      <!-- Dropzone images -->
+      <div id="dropzone"
+        class="flex flex-col items-center justify-center p-5 rounded-xl border-2 border-dashed border-cyan-500 bg-gray-700 cursor-pointer hover:bg-gray-600 transition relative group">
+        <svg class="w-10 h-10 text-cyan-400 mb-2" fill="none" stroke="currentColor" stroke-width="2"
+          viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+          d="M3 15a4 4 0 0 1 4-4h10a4 4 0 1 1 0 8H7a4 4 0 1 1 0-8zm5-8V3m0 4l-3-3m3 3l3-3"/>
+        </svg>
+        <input id="images" name="images" type="file" accept="image/*" multiple class="hidden" />
+        <span class="text-cyan-300 font-semibold group-hover:text-cyan-200 transition">
+          Glisse tes images ici ou clique pour choisir (optionnel)
+        </span>
+        <div id="preview" class="flex gap-2 mt-3 flex-wrap"></div>
+      </div>
+      <div class="text-xs text-gray-400">Tu peux sélectionner plusieurs images ou aucune</div>
+    </form>
+    <!-- === Colonnes d'annonces === -->
+    <div class="flex gap-6 w-full">
+      <!-- Annonces créées (brouillons) -->
+      <div class="flex-1 bg-gray-800 p-4 rounded-xl shadow-lg">
+        <h2 class="text-xl font-bold mb-3 text-cyan-300">Annonces créées</h2>
+        <div id="annonces-creees" class="flex flex-col gap-3"></div>
+      </div>
+      <!-- Annonces publiées -->
+      <div class="flex-1 bg-gray-800 p-4 rounded-xl shadow-lg">
+        <h2 class="text-xl font-bold mb-3 text-emerald-300">Annonces publiées</h2>
+        <div id="annonces-publiees" class="flex flex-col gap-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- === MODALE DE CONFIRMATION DE SUPPRESSION (publiée) === -->
+  <div id="modal-bg" class="fixed inset-0 modal-bg flex items-center justify-center z-50 hidden">
+    <div class="bg-gray-800 rounded-2xl p-8 flex flex-col items-center shadow-2xl border-2 border-emerald-500">
+      <h3 class="text-2xl font-bold mb-4 text-emerald-300">Supprimer l'annonce ?</h3>
+      <p class="mb-6 text-gray-200">Tu es sûr de vouloir supprimer cette annonce publiée ? Cette action est définitive.</p>
+      <div class="flex gap-4">
+        <button id="btn-modal-yes" class="bg-red-600 hover:bg-red-500 px-5 py-2 rounded-xl font-bold text-white shadow">Oui, supprimer</button>
+        <button id="btn-modal-no" class="bg-gray-600 hover:bg-gray-500 px-5 py-2 rounded-xl font-bold text-white">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- === MODALE DE MODIFICATION === -->
+  <div id="edit-modal-bg" class="fixed inset-0 modal-bg flex items-center justify-center z-50 hidden">
+    <form id="edit-form" class="bg-gray-900 w-full max-w-md rounded-2xl p-8 shadow-2xl border-2 border-blue-500 flex flex-col gap-4 relative"
+      enctype="multipart/form-data">
+      <button type="button" id="close-edit-modal" class="absolute right-4 top-4 text-gray-400 hover:text-gray-100 text-xl">×</button>
+      <h3 class="text-2xl font-bold mb-3 text-blue-300 text-center">Modifier l'annonce</h3>
+      <input required id="edit-titre" name="titre" class="rounded-lg p-3 text-black font-bold text-lg" />
+      <input id="edit-adresse" name="adresse" placeholder="Adresse liée à l'annonce (optionnel)"
+        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+      <input id="edit-youtube" name="youtube" placeholder="Lien YouTube (optionnel, ex: https://youtu.be/xxxx)"
+        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-red-400" />
+      <textarea required id="edit-contenu" name="contenu" class="rounded-lg p-3 text-black min-h-[70px] resize-y"></textarea>
+      <div class="flex flex-col gap-2">
+        <label class="text-cyan-300">Images existantes :</label>
+        <div id="edit-images-list" class="flex gap-2 flex-wrap"></div>
+        <label class="text-cyan-300 mt-2">Ajouter de nouvelles images :</label>
+        <input id="edit-images" name="images" type="file" accept="image/*" multiple class="rounded-lg" />
+        <div id="edit-preview" class="flex gap-2 mt-2 flex-wrap"></div>
+      </div>
+      <input type="hidden" id="edit-keep-images" name="keep_images" />
+      <button class="mt-4 bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl font-bold shadow">Valider les modifications</button>
+    </form>
+  </div>
+
+  <script>
+    // --- Drag & drop images (création) ---
+    const inputImages = document.getElementById('images');
+    const preview = document.getElementById('preview');
+    const dropzone = document.getElementById('dropzone');
+    dropzone.addEventListener('click', () => inputImages.click());
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-active'); });
+    dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('drag-active'); });
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault(); dropzone.classList.remove('drag-active');
+      inputImages.files = e.dataTransfer.files;
+      inputImages.dispatchEvent(new Event('change'));
+    });
+    inputImages.addEventListener('change', function () {
+      preview.innerHTML = '';
+      for (let file of inputImages.files) {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.className = "h-16 rounded shadow aspect-square object-cover border-2 border-cyan-400";
+        preview.appendChild(img);
+      }
+    });
+
+    // --- Drag & drop images (edit) ---
+    const inputEditImages = document.getElementById('edit-images');
+    const editPreview = document.getElementById('edit-preview');
+    inputEditImages.addEventListener('change', function () {
+      editPreview.innerHTML = '';
+      for (let file of inputEditImages.files) {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.className = "h-16 rounded shadow aspect-square object-cover border-2 border-cyan-400";
+        editPreview.appendChild(img);
+      }
+    });
+
+    // --- Fetch et affiche les annonces ---
+    async function fetchAnnonces() {
+      const [creees, publiees] = await Promise.all([
+        fetch('/api/annonces_creees').then(r => r.json()),
+        fetch('/api/annonces_publiees').then(r => r.json())
+      ]);
+      renderAnnonces('annonces-creees', creees, true);
+      renderAnnonces('annonces-publiees', publiees, false);
+    }
+
+    // --- Affiche une colonne d'annonces ---
+    function renderAnnonces(id, annonces, canPublish) {
+      const el = document.getElementById(id);
+      el.innerHTML = '';
+      if (!annonces.length) {
+        el.innerHTML = `<div class="text-gray-400 text-center">Aucune annonce</div>`;
+        return;
+      }
+      annonces.forEach(a => {
+        const box = document.createElement('div');
+        box.className = `
+          bg-gray-700 p-3 rounded-xl shadow border border-cyan-700 flex flex-col gap-2
+          transition-transform duration-200 hover:-translate-y-1 hover:shadow-2xl
+        `;
+        box.innerHTML = `
+          <div>
+            <div class="text-lg font-bold mb-1">${a.titre}</div>
+            ${a.adresse ? `<div class="mb-1 text-cyan-300"><span class="font-semibold">Adresse :</span> ${a.adresse}</div>` : ""}
+            ${a.youtube ? `<div class="mb-2"><a href="${a.youtube}" target="_blank" class="yt-link"><svg class="inline h-5 w-5 mr-1 mb-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.8 8.001a2.752 2.752 0 0 0-1.936-1.945C18.022 5.553 12 5.553 12 5.553s-6.022 0-7.864.503A2.753 2.753 0 0 0 2.2 8.001 28.818 28.818 0 0 0 2 12a28.818 28.818 0 0 0 .2 3.999 2.752 2.752 0 0 0 1.936 1.945c1.842.503 7.864.503 7.864.503s6.022 0 7.864-.503a2.753 2.753 0 0 0 1.936-1.945A28.818 28.818 0 0 0 22 12a28.818 28.818 0 0 0-.2-3.999zM10 15.5V8.5l6.5 3.5-6.5 3.5z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>Lien YouTube</a></div>` : ""}
+            <div class="text-gray-200 mb-2 whitespace-pre-line">${a.contenu}</div>
+            ${(a.images && a.images.length > 0) ? `
+              <div class="flex gap-2 flex-wrap mb-2">
+                ${a.images.map(url =>
+                  `<a href="${url}" target="_blank">
+                     <img src="${url}" class="h-16 rounded shadow aspect-square object-cover hover:scale-125 transition" />
+                   </a>`
+                ).join('')}
+              </div>
+            ` : ''}
+          </div>
+          <div class="flex gap-2">
+            ${canPublish ? `
+              <button onclick="publierAnnonce(${a.id})"
+                class="bg-emerald-500 px-3 py-1 rounded-xl hover:bg-emerald-400 font-semibold shadow">
+                Publier
+              </button>
+              <button onclick="editAnnonce(${a.id})"
+                class="bg-blue-600 px-3 py-1 rounded-xl hover:bg-blue-500 font-semibold shadow">
+                Modifier
+              </button>
+              <button onclick="supprimerAnnonce('${id}',${a.id})"
+                class="bg-red-600 px-3 py-1 rounded-xl hover:bg-red-500 font-semibold shadow">
+                Supprimer
+              </button>
+            ` : `
+              <button onclick="supprimerAnnonce('${id}',${a.id})"
+                class="bg-red-600 px-3 py-1 rounded-xl hover:bg-red-500 font-semibold shadow">
+                Supprimer
+              </button>
+            `}
+          </div>
+        `;
+        el.appendChild(box);
+      });
+    }
+
+    // --- Création d'une annonce ---
+    document.getElementById('annonce-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      await fetch('/api/annonces', {
+        method: 'POST',
+        body: form
+      });
+      e.target.reset();
+      preview.innerHTML = '';
+      fetchAnnonces();
+    };
+
+    // --- Publication d'une annonce (API à jour) ---
+    async function publierAnnonce(id) {
+      await fetch('/api/annonces_creees/' + id + '/publish', { method: 'POST' });
+      fetchAnnonces();
+    }
+
+    // --- Modal confirmation suppression (annonces publiées) ---
+    let idASupprimer = null;
+    async function supprimerAnnonce(colonne, id) {
+      if (colonne === "annonces-creees") {
+        await fetch('/api/annonces_creees/' + id + '/delete', { method: 'POST' });
+        fetchAnnonces();
+      } else {
+        idASupprimer = id;
+        document.getElementById('modal-bg').classList.remove('hidden');
+      }
+    }
+    document.getElementById('btn-modal-no').onclick = function() {
+      idASupprimer = null;
+      document.getElementById('modal-bg').classList.add('hidden');
+    }
+    document.getElementById('btn-modal-yes').onclick = async function() {
+      if (!idASupprimer) return;
+      await fetch('/api/annonces_publiees/' + idASupprimer + '/delete', { method: 'POST' });
+      idASupprimer = null;
+      document.getElementById('modal-bg').classList.add('hidden');
+      fetchAnnonces();
+    };
+
+    // --- Edition d'une annonce (popup modale) ---
+    window.editAnnonce = async function(id) {
+      const data = await fetch('/api/annonces_creees').then(r => r.json());
+      const annonce = data.find(a => a.id === id);
+      if (!annonce) return alert('Annonce introuvable.');
+      // Remplit le formulaire de la popup
+      document.getElementById('edit-titre').value = annonce.titre;
+      document.getElementById('edit-contenu').value = annonce.contenu;
+      document.getElementById('edit-adresse').value = annonce.adresse || '';
+      document.getElementById('edit-youtube').value = annonce.youtube || '';
+      const list = document.getElementById('edit-images-list');
+      list.innerHTML = '';
+      annonce.images.forEach((url, i) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = "relative";
+        wrapper.innerHTML = `
+          <img src="${url}" class="h-16 rounded shadow border-2 border-cyan-400 object-cover aspect-square"/>
+          <input type="checkbox" checked class="absolute top-1 left-1 h-5 w-5" data-url="${url}" style="accent-color:#06b6d4">
+        `;
+        list.appendChild(wrapper);
+      });
+      // Affiche la modale
+      document.getElementById('edit-modal-bg').classList.remove('hidden');
+      // On reset le preview images ajoutées
+      editPreview.innerHTML = '';
+      // Gestion du submit du form edit
+      document.getElementById('edit-form').onsubmit = async function(ev) {
+        ev.preventDefault();
+        // Images à garder :
+        const keep = [];
+        list.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => keep.push(cb.dataset.url));
+        document.getElementById('edit-keep-images').value = JSON.stringify(keep);
+        const form = new FormData(ev.target);
+        await fetch('/api/annonces_creees/' + id + '/edit', { method: 'POST', body: form });
+        document.getElementById('edit-modal-bg').classList.add('hidden');
+        ev.target.reset();
+        fetchAnnonces();
+      }
+    }
+    // Fermer la popup édition
+    document.getElementById('close-edit-modal').onclick = function() {
+      document.getElementById('edit-modal-bg').classList.add('hidden');
+      document.getElementById('edit-form').reset();
+      editPreview.innerHTML = '';
+    }
+
+    fetchAnnonces();
+  </script>
+</body>
+</html>
