@@ -27,10 +27,10 @@ Projet complet permettant d'afficher des annonces locales sur une application iO
 
 ## 🌐 Mise en place du panel web
 
-1. Aller dans le dossier `web-panel` :
+1. Aller dans le dossier `WEB PANEL` :
 
    ```bash
-   cd web-panel
+   cd WEB\ PANEL
    ```
 
 2. Lancer le script backend principal :
@@ -47,7 +47,7 @@ Projet complet permettant d'afficher des annonces locales sur une application iO
 
 ## 📱 App iOS (SwiftUI)
 
-1. Ouvre le dossier `app-ios` dans Xcode.
+1. Ouvre le dossier `IOS APP` dans Xcode.
 
 2. Remplace l’URL d’API par l’adresse publique (ou locale) de ta machine dans le fichier concerné (ex. `AnnoncesViewModel.swift`) :
 
@@ -69,21 +69,8 @@ Projet complet permettant d'afficher des annonces locales sur une application iO
 
 ---
 
-## 🔗 Lien GitHub
-
-Code source complet : [https://github.com/Arka-ui/cambrai_newletters-app](https://github.com/Arka-ui/cambrai_newletters-app)
-
----
-
 ## 🛠️ Technologies utilisées
 
 - Swift / SwiftUI (app iOS)
 - Python 3 (API)
 - HTML (panel statique)
-
----
-
-## 👤 Auteur
-
-Projet développé par **Arka**.  
-Contact via GitHub ou issues du repo.
