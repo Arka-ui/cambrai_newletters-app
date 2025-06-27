@@ -9,9 +9,8 @@ Projet complet permettant d'afficher des annonces locales sur une application iO
 ## 📁 Structure du projet
 
 ```
-/app-ios/          ← Application iOS (SwiftUI)
-/web-panel/        ← Panel web (index.html + backend Python)
-/README.md         ← Ce fichier
+/IOS APP/          ← Application iOS (SwiftUI)
+/WEB PANEL/        ← Panel web (index.html + backend Python)
 ```
 
 ---
@@ -42,6 +41,8 @@ Projet complet permettant d'afficher des annonces locales sur une application iO
    Le script sert l'API que l'application iOS interrogera.
 
 3. Le fichier `index.html` peut être ouvert directement dans un navigateur pour afficher l'interface visuelle.
+
+Note Importante : laisser libre l'accès a la base de données des annonces publiées mais sécurisé l'interface des création des annonces.
 
 ---
 
