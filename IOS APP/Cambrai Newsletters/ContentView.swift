@@ -383,7 +383,7 @@ struct AnnonceCardViewAPI: View {
     let colorBlindMode: DaltonianMode
 
     var imageURL: URL? {
-        annonce.images.first.flatMap { URL(string: "https://87ed-92-175-138-153.ngrok-free.app\($0)") }
+        annonce.images.first.flatMap { URL(string: $0) }
     }
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -497,7 +497,7 @@ struct DetailAnnonceViewAPI: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 16) {
                                 ForEach(annonce.images, id: \.self) { path in
-                                    let url = URL(string: "https://87ed-92-175-138-153.ngrok-free.app\(path)")
+                                    let url = URL(string: "https://amusing-eagle-kindly.ngrok-free.app\(path)")
                                     AsyncDaltonizedImage(url: url, mode: colorBlindMode)
                                         .scaledToFill()
                                         .frame(width: 180, height: 180)
@@ -518,35 +518,40 @@ struct DetailAnnonceViewAPI: View {
                             .clipShape(RoundedRectangle(cornerRadius: 20))
                     }
 
-                    // === Vidéo Youtube ===
-                    if let url = annonce.youtube, !url.isEmpty, let videoID = extractYoutubeID(from: url) {
+                    // === Vidéos YouTube (tous les liens, robustesse) ===
+                    let allYoutubeLinks = annonce.allYoutubeLinks
+                    if !allYoutubeLinks.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Vidéo liée :")
-                                .font(.system(size: userTextSize, weight: .semibold, design: .rounded))
+                            Text("🎬 Vidéos YouTube :")
+                                .font(.system(size: userTextSize - 2, weight: .medium, design: .rounded))
                                 .foregroundColor(.red)
-                            YoutubePlayerView(videoID: videoID)
-                                .frame(height: 220)
-                                .cornerRadius(16)
-                                .shadow(radius: 6)
+                            ForEach(allYoutubeLinks, id: \.self) { yt in
+                                if let videoID = extractYoutubeID(from: yt) {
+                                    YoutubePlayerView(videoID: videoID)
+                                        .frame(height: 220)
+                                        .cornerRadius(16)
+                                        .shadow(radius: 6)
+                                        .padding(.bottom, 6)
+                                }
+                            }
                         }
                     }
 
-                    // === Carte (si adresse présente) ===
-                    if let adresse = annonce.adresse, !adresse.isEmpty {
+                    // === Carte (adresses multiples) ===
+                    if let adresses = annonce.adresses, !adresses.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Adresse :")
-                                .font(.system(size: userTextSize, weight: .semibold, design: .rounded))
-                                .foregroundColor(.blue)
-                            MapAddressView(address: adresse)
-                                .frame(height: 220)
-                                .cornerRadius(16)
+                            Text("🏠 Adresses sur la carte :")
+                                .font(.system(size: userTextSize - 2, weight: .semibold, design: .rounded))
+                                .foregroundColor(.cyan)
+                            // Correction split : on remplace \r\n par \n puis split
+                            let cleanedAdresses = adresses.replacingOccurrences(of: "\r\n", with: "\n")
+                            MultiAddressMapView(addresses: cleanedAdresses.split(separator: "\n").map { String($0) })
+                                .frame(height: 240)
+                                .cornerRadius(18)
                                 .shadow(radius: 6)
-                            Text(adresse)
-                                .font(.system(size: userTextSize - 2, design: .rounded))
-                                .foregroundColor(.gray)
                         }
                     }
-
+                    
                     Spacer()
                 }
                 .padding()
@@ -852,7 +857,7 @@ struct AboutSheetView: View {
                     // === Mets ici tout ton texte de crédits et d’infos ! ===
                     Text("""
                     Développé par Eddy  
-                    Version 0.8.2
+                    Version 0.9.6
 
                     **Crédits et ressources utilisées :**
 
@@ -954,9 +959,29 @@ struct VisualEffectView: UIViewRepresentable {
     }
 }
 
+// Extraction du videoID depuis une URL Youtube (toutes variantes)
+func extractYoutubeID(from url: String) -> String? {
+    let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    let patterns = [
+        "(?:youtu.be/|youtube.com/(?:watch\\?v=|embed/|v/|shorts/)?)([\\w-]{11})",
+        "youtube.com.*[?&]v=([\\w-]{11})"
+    ]
+    for pattern in patterns {
+        if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+            let range = NSRange(trimmed.startIndex..., in: trimmed)
+            if let match = regex.firstMatch(in: trimmed, options: [], range: range),
+               let idRange = Range(match.range(at: 1), in: trimmed) {
+                return String(trimmed[idRange])
+            }
+        }
+    }
+    return nil
+}
+
+// Player YouTube SwiftUI (WKWebView)
 struct YoutubePlayerView: UIViewRepresentable {
     let videoID: String
-
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.scrollView.isScrollEnabled = false
@@ -964,44 +989,23 @@ struct YoutubePlayerView: UIViewRepresentable {
         webView.isOpaque = false
         return webView
     }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {
-        let embedURL = "https://www.youtube.com/embed/\(videoID)?playsinline=1"
+    func updateUIView(_ webView: WKWebView, context: Context) {
         let html = """
-        <html>
-            <body style="margin:0px;padding:0px;overflow:hidden;background:transparent;">
-                <iframe width="100%" height="100%" src="\(embedURL)" frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
-            </body>
-        </html>
+        <html><body style='margin:0;padding:0;background:transparent;'>
+        <iframe width='100%' height='100%' src='https://www.youtube.com/embed/\(videoID)?playsinline=1&autoplay=0&modestbranding=1&rel=0' frameborder='0' allowfullscreen style='border-radius:14px;'></iframe>
+        </body></html>
         """
-        uiView.loadHTMLString(html, baseURL: nil)
+        webView.loadHTMLString(html, baseURL: nil)
     }
 }
 
-// Extraction du videoID depuis une URL Youtube (toutes variantes)
-func extractYoutubeID(from url: String) -> String? {
-    let patterns = [
-        "youtube\\.com.*(?:\\?|&)v=([^&]*)", // v=XXXXX
-        "youtu\\.be/([^?&]*)",               // youtu.be/XXXXX
-        "youtube\\.com/embed/([^?&]*)"       // embed/XXXXX
-    ]
-    for pattern in patterns {
-        if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-            let nsurl = url as NSString
-            let results = regex.matches(in: url, range: NSRange(location: 0, length: nsurl.length))
-            if let match = results.first, match.numberOfRanges > 1 {
-                return nsurl.substring(with: match.range(at: 1))
-            }
-        }
-    }
-    return nil
-}
-
+// --- Identifiable pour coordonnées (map) ---
 struct IdentifiableCoordinate: Identifiable {
     let coordinate: CLLocationCoordinate2D
     var id: String { "\(coordinate.latitude)-\(coordinate.longitude)" }
 }
 
+// --- Vue Map pour adresse ---
 struct MapAddressView: View {
     let address: String
     @State private var region = MKCoordinateRegion(
@@ -1046,6 +1050,67 @@ struct MapAddressView: View {
     }
 }
 
+// --- Carte MapKit avec fit all markers et géocodage fiable ---
+import MapKit
+struct AddressAnnotation: Identifiable, Equatable {
+    let id = UUID()
+    let coordinate: CLLocationCoordinate2D
+    let title: String
+    static func == (lhs: AddressAnnotation, rhs: AddressAnnotation) -> Bool {
+        lhs.coordinate.latitude == rhs.coordinate.latitude &&
+        lhs.coordinate.longitude == rhs.coordinate.longitude &&
+        lhs.title == rhs.title
+    }
+}
+class MultiAddressMapModel: NSObject, ObservableObject, MKMapViewDelegate {
+    @Published var annotations: [AddressAnnotation] = []
+    private var lastAddresses: [String] = []
+    func geocode(addresses: [String], mapView: MKMapView?) {
+        guard addresses != lastAddresses else { return }
+        lastAddresses = addresses
+        annotations = []
+        let geocoder = CLGeocoder()
+        var tempAnnotations: [AddressAnnotation] = []
+        let group = DispatchGroup()
+        for address in addresses where !address.trimmingCharacters(in: .whitespaces).isEmpty {
+            group.enter()
+            geocoder.geocodeAddressString(address) { placemarks, error in
+                defer { group.leave() }
+                if let loc = placemarks?.first?.location {
+                    let annotation = AddressAnnotation(coordinate: loc.coordinate, title: address)
+                    tempAnnotations.append(annotation)
+                }
+            }
+        }
+        group.notify(queue: .main) {
+            self.annotations = tempAnnotations
+            if let mapView = mapView, !tempAnnotations.isEmpty {
+                mapView.removeAnnotations(mapView.annotations)
+                let mkAnnotations = tempAnnotations.map { ann -> MKPointAnnotation in
+                    let a = MKPointAnnotation()
+                    a.coordinate = ann.coordinate
+                    a.title = ann.title
+                    return a
+                }
+                mapView.addAnnotations(mkAnnotations)
+                mapView.showAnnotations(mkAnnotations, animated: true)
+            }
+        }
+    }
+}
+struct MultiAddressMapView: View {
+    let addresses: [String]
+    @StateObject private var model = MultiAddressMapViewModel()
+    var body: some View {
+        Map(coordinateRegion: $model.region, annotationItems: model.coordinates.map { IdentifiableCoordinate(coordinate: $0) }) { item in
+            MapMarker(coordinate: item.coordinate, tint: .cyan)
+        }
+        .onAppear { model.geocodeAll(addresses: addresses) }
+        .onChange(of: addresses) { new in model.geocodeAll(addresses: new) }
+    }
+}
+
+// --- Rappel (EventKit) ---
 struct ReminderSheetView: View {
     let annonce: AnnonceAPI
     let effectiveTheme: AppTheme
@@ -1340,7 +1405,6 @@ struct ReminderSheetView: View {
                     try store.save(event, span: .thisEvent)
                     presentationMode.wrappedValue.dismiss()
                 } catch {
-                    print("Erreur exacte lors de l'ajout au calendrier :", error.localizedDescription)
                     showCalendarError = true
                 }
             }
@@ -1403,5 +1467,63 @@ struct ReminderUnitButton: View {
         }
         .buttonStyle(.plain)
         .shadow(color: isActive ? accent.opacity(0.12) : .clear, radius: 3, y: 1)
+    }
+}
+
+extension AnnonceAPI {
+    var allYoutubeLinks: [String] {
+        var links: [String] = []
+        if let y = youtube, !y.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            links.append(y.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        if let ys = youtubes {
+            links.append(contentsOf:
+                ys.components(separatedBy: .newlines)
+                  .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                  .filter { !$0.isEmpty }
+            )
+        }
+        // Retire les doublons et liens vides
+        return Array(Set(links)).filter { !$0.isEmpty }
+    }
+}
+
+// --- ViewModel robuste pour la carte multi-adresses ---
+class MultiAddressMapViewModel: ObservableObject {
+    @Published var coordinates: [CLLocationCoordinate2D] = []
+    @Published var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 50.176, longitude: 3.234),
+        span: MKCoordinateSpan(latitudeDelta: 0.2, longitudeDelta: 0.2)
+    )
+    func geocodeAll(addresses: [String]) {
+        // Nettoyage : trim, suppression des vides, logs
+        let cleaned = addresses.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        print("[DEBUG] Adresses à géocoder :", cleaned)
+        coordinates = []
+        let geocoder = CLGeocoder()
+        var found: [CLLocationCoordinate2D] = []
+        let group = DispatchGroup()
+        for address in cleaned {
+            group.enter()
+            geocoder.geocodeAddressString(address) { placemarks, _ in
+                if let coord = placemarks?.first?.location?.coordinate {
+                    found.append(coord)
+                } else {
+                    print("[DEBUG] Adresse non trouvée :", address)
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            self.coordinates = found
+            print("[DEBUG] Coordonnées trouvées :", found)
+            if !found.isEmpty {
+                let avgLat = found.map { $0.latitude }.reduce(0, +) / Double(found.count)
+                let avgLon = found.map { $0.longitude }.reduce(0, +) / Double(found.count)
+                self.region.center = CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon)
+                self.region.span = MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
+            }
+        }
     }
 }

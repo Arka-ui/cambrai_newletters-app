@@ -5,288 +5,633 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Gestion des Annonces</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+      background: linear-gradient(120deg, #0ea5e9 0%, #22d3ee 50%, #a5b4fc 100%);
+      opacity: 0.18;
+      animation: bgMove 18s linear infinite alternate;
+    }
+    @keyframes bgMove {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
     .drag-active { border: 2px dashed #67e8f9 !important; background-color: #164e63 !important; }
-    .modal-bg { background: rgba(0,0,0,0.6); }
+    .modal-bg { transition: background 0.3s; }
+    .modal-bg.open { background: rgba(0,0,0,0.7); }
     .yt-link { color: #FF5757; text-decoration: underline; font-weight: 600; }
     .yt-link:hover { color: #fff; background: #ff5757; border-radius: 6px; transition: 0.2s; padding: 2px 6px; }
+    .dropzone { border: 2px dashed #67e8f9; background: #164e63; padding: 20px; border-radius: 10px; text-align: center; cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }
+    .dropzone.dragover { background: #155e75; box-shadow: 0 0 0 4px #67e8f9; }
+    .thumb { height: 64px; border-radius: 8px; margin: 4px; box-shadow: 0 2px 8px #0003; object-fit: cover; transition: transform 0.2s, box-shadow 0.2s; }
+    .thumb:hover { transform: scale(1.15) rotate(-2deg); box-shadow: 0 4px 16px #06b6d4; z-index: 2; }
+    @keyframes fadeInBg { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .modal-bg > * { animation: popIn 0.3s; }
+    .notif {
+      position: fixed; top: 30px; right: 30px; z-index: 1000;
+      background: linear-gradient(90deg, #06b6d4, #22d3ee);
+      color: #222; padding: 16px 32px; border-radius: 12px;
+      font-weight: bold; font-size: 1.1rem; box-shadow: 0 4px 24px #06b6d4aa;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s;
+    }
+    .notif.show { opacity: 1; pointer-events: auto; }
+    .epingle-glow {
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 0 0 0 #22ff88, 0 0 16px 4px #22ff88cc;
+      animation: neon-glow 1.5s linear infinite;
+      border: 2.5px solid #22ff88;
+    }
+    @keyframes neon-glow {
+      0% { box-shadow: 0 0 0 0 #22ff88, 0 0 16px 4px #22ff88cc; }
+      50% { box-shadow: 0 0 12px 4px #22ff88, 0 0 32px 8px #22ff88cc; }
+      100% { box-shadow: 0 0 0 0 #22ff88, 0 0 16px 4px #22ff88cc; }
+    }
+    .fade-in {
+      animation: fadeInCard 0.5s cubic-bezier(.4,2,.6,1) both;
+    }
+    @keyframes fadeInCard {
+      0% { opacity: 0; transform: translateY(30px) scale(0.95); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .btn-action {
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .btn-action:hover {
+      box-shadow: 0 0 8px 2px #22d3ee, 0 0 0 2px #fff;
+      transform: scale(1.08) rotate(-2deg);
+    }
+    .popover-img {
+      position: fixed; z-index: 9999; pointer-events: none;
+      box-shadow: 0 8px 32px #06b6d4cc; border-radius: 16px;
+      max-width: 320px; max-height: 320px; background: #222;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .popover-img.show { opacity: 1; }
+    .loader {
+      border: 4px solid #22d3ee; border-top: 4px solid #fff;
+      border-radius: 50%; width: 36px; height: 36px;
+      animation: spin 1s linear infinite; margin: 0 auto;
+      position: fixed; left: 50%; top: 50%; z-index: 2000;
+      transform: translate(-50%, -50%);
+      background: #222;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .shake {
+      animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    }
+    @keyframes shake {
+      10%, 90% { transform: translateX(-2px); }
+      20%, 80% { transform: translateX(4px); }
+      30%, 50%, 70% { transform: translateX(-8px); }
+      40%, 60% { transform: translateX(8px); }
+    }
+    .theme-toggle {
+      position: fixed; bottom: 30px; right: 30px; z-index: 1001;
+      background: #222; color: #22d3ee; border: 2px solid #22d3ee;
+      border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; box-shadow: 0 2px 12px #06b6d4aa;
+      transition: background 0.2s, color 0.2s;
+    }
+    .theme-toggle.light { background: #fff; color: #0ea5e9; border-color: #0ea5e9; }
+
+    /* --- Styles spécifiques ajoutés --- */
+    /* Fond animé SVG */
+    @keyframes waveAnimation {
+      0% { transform: translateX(0); }
+      50% { transform: translateX(-50%); }
+      100% { transform: translateX(0); }
+    }
+    #bg-waves {
+      animation: waveAnimation 10s linear infinite;
+    }
+    .form-section {
+      background: rgba(17, 24, 39, 0.98); /* gris très foncé, presque opaque */
+      box-shadow: 0 2px 16px #0ea5e955;
+      border-radius: 18px;
+      padding: 2.5rem 2rem 2rem 2rem;
+      margin-bottom: 2rem;
+      position: relative;
+      z-index: 2;
+      animation: fadeInForm 0.7s cubic-bezier(.4,2,.6,1);
+    }
+    @keyframes fadeInForm {
+      0% { opacity: 0; transform: translateY(-30px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .form-section input, .form-section textarea {
+      background: #23272f;
+      color: #e0f2fe;
+      border: 1.5px solid #374151;
+      transition: box-shadow 0.2s, border 0.2s, background 0.2s;
+      box-shadow: 0 1px 4px #0ea5e922;
+    }
+    .form-section input:focus, .form-section textarea:focus {
+      border: 2px solid #22d3ee;
+      background: #1e293b;
+      color: #fff;
+      box-shadow: 0 0 0 2px #22d3ee55;
+    }
+    .form-section label {
+      font-weight: bold;
+      letter-spacing: 0.01em;
+      color: #22d3ee;
+      margin-bottom: 0.2em;
+    }
+    .form-section .dropzone {
+      border: 2.5px dashed #22d3ee;
+      background: #23272f;
+      color: #0891b2;
+      font-weight: bold;
+      font-size: 1.1em;
+      transition: background 0.2s, box-shadow 0.2s;
+      margin-bottom: 0.5em;
+    }
+    .form-section .dropzone.dragover {
+      background: #1e293b;
+      box-shadow: 0 0 0 4px #22d3ee;
+    }
+    .form-section .thumb {
+      border: 2px solid #22d3ee;
+      box-shadow: 0 2px 8px #06b6d4cc;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .form-section .thumb:hover {
+      transform: scale(1.15) rotate(-2deg);
+      box-shadow: 0 4px 16px #0ea5e9;
+      z-index: 2;
+    }
+    .form-section .advanced-anim {
+      animation: slideDownAdv 0.5s cubic-bezier(.4,2,.6,1);
+    }
+    @keyframes slideDownAdv {
+      0% { opacity: 0; transform: translateY(-20px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .form-section .adv-btn {
+      background: #1e293b;
+      color: #22d3ee;
+      font-weight: bold;
+      border: 1.5px solid #374151;
+      border-radius: 8px;
+      padding: 0.6em 1.2em;
+      margin-top: 0.5em;
+      margin-bottom: 0.5em;
+      box-shadow: 0 2px 8px #0ea5e922;
+      transition: background 0.2s, box-shadow 0.2s, transform 0.15s, color 0.2s;
+      cursor: pointer;
+    }
+    .form-section .adv-btn:hover {
+      background: #23272f;
+      color: #fff;
+      box-shadow: 0 4px 16px #0ea5e955;
+      transform: scale(1.05);
+    }
+    .form-section .checkbox-emoji {
+      font-size: 1.2em;
+      margin-right: 0.3em;
+    }
+    .form-section .input-row {
+      display: flex;
+      gap: 1em;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .form-section .input-row > * {
+      flex: 1 1 200px;
+    }
   </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center">
-  <div class="w-full max-w-4xl mt-10">
-    <h1 class="text-4xl font-extrabold mb-6 text-center text-cyan-400">Création & Gestion d'Annonces</h1>
-    <!-- === Formulaire de création === -->
-    <form id="annonce-form" class="flex flex-col gap-3 bg-gray-800 p-6 rounded-2xl mb-8 shadow-lg relative" enctype="multipart/form-data" autocomplete="off">
-      <div class="flex gap-4 items-center">
-        <input required id="titre" name="titre" placeholder="Titre de l'annonce"
-          class="flex-1 p-3 rounded-lg text-black font-bold text-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-        <button class="bg-gradient-to-r from-cyan-500 to-emerald-400 px-6 py-2 rounded-xl font-bold hover:scale-105 transition shadow">
-          Créer
-        </button>
+<body id="body-root" class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center dark">
+    <!-- Header stylisé avec logo/emoji -->
+    <header class="w-full max-w-4xl flex flex-col items-center mt-8 mb-4 z-10">
+      <div class="flex items-center gap-4 mb-2">
+        <span class="text-5xl font-extrabold text-cyan-400 drop-shadow-lg">Cambrai Newsletters</span>
       </div>
-      <input id="adresse" name="adresse" placeholder="Adresse liée à l'annonce (optionnel)"
-        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-      <input id="youtube" name="youtube" placeholder="Lien YouTube (optionnel, ex: https://youtu.be/xxxx)"
-        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-red-400" />
-      <textarea required id="contenu" name="contenu" placeholder="Contenu de l'annonce"
-        class="rounded-lg p-3 text-black min-h-[70px] resize-y focus:outline-none focus:ring-2 focus:ring-cyan-400"></textarea>
-      <!-- Dropzone images -->
-      <div id="dropzone"
-        class="flex flex-col items-center justify-center p-5 rounded-xl border-2 border-dashed border-cyan-500 bg-gray-700 cursor-pointer hover:bg-gray-600 transition relative group">
-        <svg class="w-10 h-10 text-cyan-400 mb-2" fill="none" stroke="currentColor" stroke-width="2"
-          viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
-          d="M3 15a4 4 0 0 1 4-4h10a4 4 0 1 1 0 8H7a4 4 0 1 1 0-8zm5-8V3m0 4l-3-3m3 3l3-3"/>
-        </svg>
-        <input id="images" name="images" type="file" accept="image/*" multiple class="hidden" />
-        <span class="text-cyan-300 font-semibold group-hover:text-cyan-200 transition">
-          Glisse tes images ici ou clique pour choisir (optionnel)
-        </span>
-        <div id="preview" class="flex gap-2 mt-3 flex-wrap"></div>
-      </div>
-      <div class="text-xs text-gray-400">Tu peux sélectionner plusieurs images ou aucune</div>
-    </form>
-    <!-- === Colonnes d'annonces === -->
-    <div class="flex gap-6 w-full">
-      <!-- Annonces créées (brouillons) -->
-      <div class="flex-1 bg-gray-800 p-4 rounded-xl shadow-lg">
-        <h2 class="text-xl font-bold mb-3 text-cyan-300">Annonces créées</h2>
-        <div id="annonces-creees" class="flex flex-col gap-3"></div>
-      </div>
-      <!-- Annonces publiées -->
-      <div class="flex-1 bg-gray-800 p-4 rounded-xl shadow-lg">
-        <h2 class="text-xl font-bold mb-3 text-emerald-300">Annonces publiées</h2>
-        <div id="annonces-publiees" class="flex flex-col gap-3"></div>
+      <div class="text-lg text-cyan-200 font-semibold mb-2">Bienvenue sur le panneau d'annonces ✨</div>
+      <div class="text-base text-cyan-100">Crée, publie, épingle et gère toutes tes annonces en un clin d'œil&nbsp;!</div>
+    </header>
+    <div class="w-full max-w-4xl mt-10">
+      <h1 class="text-4xl font-extrabold mb-6 text-center text-cyan-400">Création & Gestion d'Annonces</h1>
+      <!-- === Formulaire de création === -->
+      <form id="annonce-form" class="form-section flex flex-col gap-3" enctype="multipart/form-data" autocomplete="off">
+        <div class="input-row">
+          <input required id="titre" name="titre" placeholder="📝 Titre de l'annonce" class="p-3 rounded-lg text-black font-bold text-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+          <button type="submit" class="bg-gradient-to-r from-cyan-500 to-emerald-400 px-6 py-2 rounded-xl font-bold hover:scale-105 transition shadow">Créer 🚀</button>
+        </div>
+        <textarea required id="contenu" name="contenu" placeholder="✏️ Contenu de l'annonce" class="rounded-lg p-3 text-black min-h-[70px] resize-y focus:outline-none focus:ring-2 focus:ring-cyan-400"></textarea>
+        <div id="dropzone" class="dropzone">🖼️ Glissez-déposez des images ici ou cliquez pour sélectionner</div>
+        <input id="images" name="images" type="file" accept="image/*" multiple style="display:none;" />
+        <div id="thumbs" class="flex flex-wrap gap-2"></div>
+        <div class="input-row items-center gap-3" style="align-items: center;">
+          <label for="epingle" class="flex items-center gap-2 cursor-pointer text-cyan-300 font-semibold checkbox-emoji mb-0">
+            <input type="checkbox" id="epingle" name="epingle" class="accent-cyan-500 scale-125 mr-2" style="margin-top:0; margin-bottom:0;" />
+            <span>📌 Épingler cette annonce</span>
+          </label>
+        </div>
+        <button type="button" id="toggle-advanced" class="adv-btn">⚙️ Options avancées</button>
+        <div id="advanced-fields" style="display:none" class="flex flex-col gap-3 mt-2 p-4 rounded-xl bg-cyan-900/60 advanced-anim">
+          <input id="tags" name="tags" placeholder="🏷️ Tags (séparés par des virgules)" class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400 w-64" />
+          <input id="lieux" name="lieux" placeholder="📍 Lieux (ex: Cambrai, Paris...)" class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400 w-64" list="lieux-list" />
+          <datalist id="lieux-list">
+            <option>Cambrai</option><option>Paris</option><option>Lille</option><option>Valenciennes</option><option>Douai</option>
+          </datalist>
+          <div class="flex flex-col gap-2 mb-2">
+            <label class="text-cyan-300 font-semibold">🏠 Adresses (une par ligne) :</label>
+            <textarea id="adresses" name="adresses" placeholder="🏠 12 rue de la Paix\n🏠 8 avenue Jean Jaurès" class="rounded-lg p-3 text-black min-h-[40px] resize-y focus:outline-none focus:ring-2 focus:ring-cyan-400"></textarea>
+          </div>
+          <div class="flex flex-col gap-2 mb-2">
+            <label class="text-cyan-300 font-semibold">🎬 Liens YouTube (un par ligne) :</label>
+            <textarea id="youtubes" name="youtubes" placeholder="🎬 https://youtu.be/xxxx\n🎬 https://youtube.com/watch?v=yyyy" class="rounded-lg p-3 text-black min-h-[40px] resize-y focus:outline-none focus:ring-2 focus:ring-red-400"></textarea>
+          </div>
+        </div>
+        <div class="text-xs text-gray-400">Ajoutez une ou plusieurs images (drag & drop ou clic) 🖼️</div>
+      </form>
+      <!-- === Colonnes d'annonces === -->
+      <div class="flex gap-6 w-full">
+        <!-- Annonces créées (brouillons) -->
+        <div class="flex-1 bg-gray-800 p-4 rounded-xl shadow-lg">
+          <h2 class="text-xl font-bold mb-3 text-cyan-300 flex items-center gap-2"><span style="font-size:1.2em;">📝</span> Annonces créées</h2>
+          <div id="annonces-creees" class="flex flex-col gap-3"></div>
+        </div>
+        <!-- Annonces publiées -->
+        <div class="flex-1 bg-gray-800 p-4 rounded-xl shadow-lg">
+          <h2 class="text-xl font-bold mb-3 text-emerald-300 flex items-center gap-2"><span style="font-size:1.2em;">✅</span> Annonces publiées</h2>
+          <div id="annonces-publiees" class="flex flex-col gap-3"></div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- === MODALE DE CONFIRMATION DE SUPPRESSION (publiée) === -->
-  <div id="modal-bg" class="fixed inset-0 modal-bg flex items-center justify-center z-50 hidden">
-    <div class="bg-gray-800 rounded-2xl p-8 flex flex-col items-center shadow-2xl border-2 border-emerald-500">
-      <h3 class="text-2xl font-bold mb-4 text-emerald-300">Supprimer l'annonce ?</h3>
-      <p class="mb-6 text-gray-200">Tu es sûr de vouloir supprimer cette annonce publiée ? Cette action est définitive.</p>
-      <div class="flex gap-4">
-        <button id="btn-modal-yes" class="bg-red-600 hover:bg-red-500 px-5 py-2 rounded-xl font-bold text-white shadow">Oui, supprimer</button>
-        <button id="btn-modal-no" class="bg-gray-600 hover:bg-gray-500 px-5 py-2 rounded-xl font-bold text-white">Annuler</button>
+    <!-- === MODALE DE CONFIRMATION DE SUPPRESSION (publiée) === -->
+    <div id="modal-bg" class="fixed inset-0 modal-bg flex items-center justify-center z-50 hidden">
+      <div class="bg-gray-800 rounded-2xl p-8 flex flex-col items-center shadow-2xl border-2 border-emerald-500">
+        <h3 class="text-2xl font-bold mb-4 text-emerald-300">Supprimer l'annonce ?</h3>
+        <p class="mb-6 text-gray-200">Tu es sûr de vouloir supprimer cette annonce publiée ? Cette action est définitive.</p>
+        <div class="flex gap-4">
+          <button id="btn-modal-yes" class="bg-red-600 hover:bg-red-500 px-5 py-2 rounded-xl font-bold text-white shadow">Oui, supprimer</button>
+          <button id="btn-modal-no" class="bg-gray-600 hover:bg-gray-500 px-5 py-2 rounded-xl font-bold text-white">Annuler</button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- === MODALE DE MODIFICATION === -->
-  <div id="edit-modal-bg" class="fixed inset-0 modal-bg flex items-center justify-center z-50 hidden">
-    <form id="edit-form" class="bg-gray-900 w-full max-w-md rounded-2xl p-8 shadow-2xl border-2 border-blue-500 flex flex-col gap-4 relative"
-      enctype="multipart/form-data">
-      <button type="button" id="close-edit-modal" class="absolute right-4 top-4 text-gray-400 hover:text-gray-100 text-xl">×</button>
-      <h3 class="text-2xl font-bold mb-3 text-blue-300 text-center">Modifier l'annonce</h3>
-      <input required id="edit-titre" name="titre" class="rounded-lg p-3 text-black font-bold text-lg" />
-      <input id="edit-adresse" name="adresse" placeholder="Adresse liée à l'annonce (optionnel)"
-        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-      <input id="edit-youtube" name="youtube" placeholder="Lien YouTube (optionnel, ex: https://youtu.be/xxxx)"
-        class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-red-400" />
-      <textarea required id="edit-contenu" name="contenu" class="rounded-lg p-3 text-black min-h-[70px] resize-y"></textarea>
-      <div class="flex flex-col gap-2">
-        <label class="text-cyan-300">Images existantes :</label>
-        <div id="edit-images-list" class="flex gap-2 flex-wrap"></div>
-        <label class="text-cyan-300 mt-2">Ajouter de nouvelles images :</label>
-        <input id="edit-images" name="images" type="file" accept="image/*" multiple class="rounded-lg" />
-        <div id="edit-preview" class="flex gap-2 mt-2 flex-wrap"></div>
-      </div>
-      <input type="hidden" id="edit-keep-images" name="keep_images" />
-      <button class="mt-4 bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl font-bold shadow">Valider les modifications</button>
-    </form>
-  </div>
-
-  <script>
-    // --- Drag & drop images (création) ---
-    const inputImages = document.getElementById('images');
-    const preview = document.getElementById('preview');
-    const dropzone = document.getElementById('dropzone');
-    dropzone.addEventListener('click', () => inputImages.click());
-    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-active'); });
-    dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('drag-active'); });
-    dropzone.addEventListener('drop', e => {
-      e.preventDefault(); dropzone.classList.remove('drag-active');
-      inputImages.files = e.dataTransfer.files;
-      inputImages.dispatchEvent(new Event('change'));
-    });
-    inputImages.addEventListener('change', function () {
-      preview.innerHTML = '';
-      for (let file of inputImages.files) {
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file);
-        img.className = "h-16 rounded shadow aspect-square object-cover border-2 border-cyan-400";
-        preview.appendChild(img);
-      }
-    });
-
-    // --- Drag & drop images (edit) ---
-    const inputEditImages = document.getElementById('edit-images');
-    const editPreview = document.getElementById('edit-preview');
-    inputEditImages.addEventListener('change', function () {
-      editPreview.innerHTML = '';
-      for (let file of inputEditImages.files) {
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file);
-        img.className = "h-16 rounded shadow aspect-square object-cover border-2 border-cyan-400";
-        editPreview.appendChild(img);
-      }
-    });
-
-    // --- Fetch et affiche les annonces ---
-    async function fetchAnnonces() {
-      const [creees, publiees] = await Promise.all([
-        fetch('/api/annonces_creees').then(r => r.json()),
-        fetch('/api/annonces_publiees').then(r => r.json())
-      ]);
-      renderAnnonces('annonces-creees', creees, true);
-      renderAnnonces('annonces-publiees', publiees, false);
-    }
-
-    // --- Affiche une colonne d'annonces ---
-    function renderAnnonces(id, annonces, canPublish) {
-      const el = document.getElementById(id);
-      el.innerHTML = '';
-      if (!annonces.length) {
-        el.innerHTML = `<div class="text-gray-400 text-center">Aucune annonce</div>`;
-        return;
-      }
-      annonces.forEach(a => {
-        const box = document.createElement('div');
-        box.className = `
-          bg-gray-700 p-3 rounded-xl shadow border border-cyan-700 flex flex-col gap-2
-          transition-transform duration-200 hover:-translate-y-1 hover:shadow-2xl
-        `;
-        box.innerHTML = `
-          <div>
-            <div class="text-lg font-bold mb-1">${a.titre}</div>
-            ${a.adresse ? `<div class="mb-1 text-cyan-300"><span class="font-semibold">Adresse :</span> ${a.adresse}</div>` : ""}
-            ${a.youtube ? `<div class="mb-2"><a href="${a.youtube}" target="_blank" class="yt-link"><svg class="inline h-5 w-5 mr-1 mb-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21.8 8.001a2.752 2.752 0 0 0-1.936-1.945C18.022 5.553 12 5.553 12 5.553s-6.022 0-7.864.503A2.753 2.753 0 0 0 2.2 8.001 28.818 28.818 0 0 0 2 12a28.818 28.818 0 0 0 .2 3.999 2.752 2.752 0 0 0 1.936 1.945c1.842.503 7.864.503 7.864.503s6.022 0 7.864-.503a2.753 2.753 0 0 0 1.936-1.945A28.818 28.818 0 0 0 22 12a28.818 28.818 0 0 0-.2-3.999zM10 15.5V8.5l6.5 3.5-6.5 3.5z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>Lien YouTube</a></div>` : ""}
-            <div class="text-gray-200 mb-2 whitespace-pre-line">${a.contenu}</div>
-            ${(a.images && a.images.length > 0) ? `
-              <div class="flex gap-2 flex-wrap mb-2">
-                ${a.images.map(url =>
-                  `<a href="${url}" target="_blank">
-                     <img src="${url}" class="h-16 rounded shadow aspect-square object-cover hover:scale-125 transition" />
-                   </a>`
-                ).join('')}
-              </div>
-            ` : ''}
+    <!-- === MODALE DE MODIFICATION === -->
+    <div id="edit-modal-bg" class="fixed inset-0 modal-bg flex items-center justify-center z-50 hidden">
+      <form id="edit-form" class="bg-gray-900 w-full max-w-md rounded-2xl p-8 shadow-2xl border-2 border-blue-500 flex flex-col gap-4 relative"
+        enctype="multipart/form-data">
+        <button type="button" id="close-edit-modal" class="absolute right-4 top-4 text-gray-400 hover:text-gray-100 text-xl">×</button>
+        <h3 class="text-2xl font-bold mb-3 text-blue-300 text-center">Modifier l'annonce</h3>
+        <input required id="edit-titre" name="titre" class="rounded-lg p-3 text-black font-bold text-lg" />
+        <input id="edit-adresse" name="adresse" placeholder="Adresse liée à l'annonce (optionnel)"
+          class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+        <input id="edit-youtube" name="youtube" placeholder="Lien YouTube (optionnel, ex: https://youtu.be/xxxx)"
+          class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-red-400" />
+        <textarea required id="edit-contenu" name="contenu" class="rounded-lg p-3 text-black min-h-[70px] resize-y"></textarea>
+        <div class="flex flex-wrap gap-3 mb-2">
+          <input id="tags" name="tags" placeholder="Tags (séparés par des virgules)" class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400 w-64" />
+          <input id="lieux" name="lieux" placeholder="Lieux (ex: Cambrai, Paris...)" class="p-3 rounded-lg text-black text-base focus:outline-none focus:ring-2 focus:ring-cyan-400 w-64" list="lieux-list" />
+          <datalist id="lieux-list">
+            <option>Cambrai</option><option>Paris</option><option>Lille</option><option>Valenciennes</option><option>Douai</option>
+          </datalist>
+        </div>
+        <div class="flex flex-col gap-2 mb-2">
+          <label class="text-cyan-300">Adresses existantes :</label>
+          <div id="edit-thumbs" class="flex flex-wrap gap-2"></div>
+          <div id="edit-dropzone" class="dropzone">Glissez-déposez des images ici ou cliquez pour sélectionner</div>
+          <input id="edit-images" name="edit-images" type="file" accept="image/*" multiple style="display:none;" />
+          <div class="flex items-center gap-2 mt-2">
+            <input type="checkbox" id="edit-epingle" name="epingle" class="accent-cyan-500 scale-125" />
+            <label for="edit-epingle" class="text-cyan-300 font-semibold">Épingler cette annonce</label>
           </div>
-          <div class="flex gap-2">
-            ${canPublish ? `
-              <button onclick="publierAnnonce(${a.id})"
-                class="bg-emerald-500 px-3 py-1 rounded-xl hover:bg-emerald-400 font-semibold shadow">
-                Publier
-              </button>
-              <button onclick="editAnnonce(${a.id})"
-                class="bg-blue-600 px-3 py-1 rounded-xl hover:bg-blue-500 font-semibold shadow">
-                Modifier
-              </button>
-              <button onclick="supprimerAnnonce('${id}',${a.id})"
-                class="bg-red-600 px-3 py-1 rounded-xl hover:bg-red-500 font-semibold shadow">
-                Supprimer
-              </button>
-            ` : `
-              <button onclick="supprimerAnnonce('${id}',${a.id})"
-                class="bg-red-600 px-3 py-1 rounded-xl hover:bg-red-500 font-semibold shadow">
-                Supprimer
-              </button>
-            `}
-          </div>
-        `;
-        el.appendChild(box);
+        </div>
+        <button class="mt-4 bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl font-bold shadow">Valider les modifications</button>
+      </form>
+    </div>
+
+    <div id="notif" class="notif"></div>
+    <div id="loader" class="loader" style="display:none"></div>
+    <div id="popover-img" class="popover-img"></div>
+    <button id="theme-toggle" class="theme-toggle" title="Changer de thème">🌙</button>
+
+    <footer class="w-full max-w-4xl mt-10 mb-4 flex flex-col items-center z-10">
+      <div class="text-cyan-300 text-sm flex items-center gap-2"><span style="font-size:1.3em;">💡✨</span>Astuce : tu peux glisser-déposer des images ou épingler une annonce pour la mettre en avant ! 😎</div>
+      <div class="text-cyan-700 text-xs mt-2">Cambrai Newsletters &copy; 2025 🦋</div>
+    </footer>
+
+    <script>
+      // --- Drag & Drop images (création) ---
+      const dropzone = document.getElementById('dropzone');
+      const imagesInput = document.getElementById('images');
+      const thumbs = document.getElementById('thumbs');
+      dropzone.addEventListener('click', () => imagesInput.click());
+      dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+      dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+      dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        imagesInput.files = e.dataTransfer.files;
+        showThumbs(imagesInput.files, thumbs);
       });
-    }
+      imagesInput.addEventListener('change', () => showThumbs(imagesInput.files, thumbs));
+      function showThumbs(files, container) {
+        container.innerHTML = '';
+        Array.from(files).forEach(file => {
+          const img = document.createElement('img');
+          img.className = 'thumb';
+          img.src = URL.createObjectURL(file);
+          container.appendChild(img);
+        });
+      }
 
-    // --- Création d'une annonce ---
-    document.getElementById('annonce-form').onsubmit = async (e) => {
-      e.preventDefault();
-      const form = new FormData(e.target);
-      await fetch('/api/annonces', {
-        method: 'POST',
-        body: form
-      });
-      e.target.reset();
-      preview.innerHTML = '';
+      // --- CRUD annonces via API locale (main.py) ---
       fetchAnnonces();
-    };
-
-    // --- Publication d'une annonce (API à jour) ---
-    async function publierAnnonce(id) {
-      await fetch('/api/annonces_creees/' + id + '/publish', { method: 'POST' });
-      fetchAnnonces();
-    }
-
-    // --- Modal confirmation suppression (annonces publiées) ---
-    let idASupprimer = null;
-    async function supprimerAnnonce(colonne, id) {
-      if (colonne === "annonces-creees") {
-        await fetch('/api/annonces_creees/' + id + '/delete', { method: 'POST' });
-        fetchAnnonces();
+      let isDark = true;
+      const root = document.documentElement;
+      const body = document.getElementById('body-root');
+      function setTheme(dark) {
+        isDark = dark;
+        if (isDark) {
+          root.classList.add('dark');
+          body.classList.add('bg-gray-900', 'text-gray-100');
+          body.classList.remove('bg-gray-50', 'text-gray-900');
+        } else {
+          root.classList.remove('dark');
+          body.classList.remove('bg-gray-900', 'text-gray-100');
+          body.classList.add('bg-gray-50', 'text-gray-900');
+        }
+        document.getElementById('theme-toggle').textContent = isDark ? '🌙' : '☀️';
+        document.getElementById('theme-toggle').classList.toggle('light', !isDark);
+      }
+      document.getElementById('theme-toggle').onclick = function() {
+        setTheme(!isDark);
+      }
+      // Mode auto au chargement
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+        setTheme(false);
       } else {
-        idASupprimer = id;
-        document.getElementById('modal-bg').classList.remove('hidden');
+        setTheme(true);
       }
-    }
-    document.getElementById('btn-modal-no').onclick = function() {
-      idASupprimer = null;
-      document.getElementById('modal-bg').classList.add('hidden');
-    }
-    document.getElementById('btn-modal-yes').onclick = async function() {
-      if (!idASupprimer) return;
-      await fetch('/api/annonces_publiees/' + idASupprimer + '/delete', { method: 'POST' });
-      idASupprimer = null;
-      document.getElementById('modal-bg').classList.add('hidden');
-      fetchAnnonces();
-    };
 
-    // --- Edition d'une annonce (popup modale) ---
-    window.editAnnonce = async function(id) {
-      const data = await fetch('/api/annonces_creees').then(r => r.json());
-      const annonce = data.find(a => a.id === id);
-      if (!annonce) return alert('Annonce introuvable.');
-      // Remplit le formulaire de la popup
-      document.getElementById('edit-titre').value = annonce.titre;
-      document.getElementById('edit-contenu').value = annonce.contenu;
-      document.getElementById('edit-adresse').value = annonce.adresse || '';
-      document.getElementById('edit-youtube').value = annonce.youtube || '';
-      const list = document.getElementById('edit-images-list');
-      list.innerHTML = '';
-      annonce.images.forEach((url, i) => {
-        const wrapper = document.createElement('div');
-        wrapper.className = "relative";
-        wrapper.innerHTML = `
-          <img src="${url}" class="h-16 rounded shadow border-2 border-cyan-400 object-cover aspect-square"/>
-          <input type="checkbox" checked class="absolute top-1 left-1 h-5 w-5" data-url="${url}" style="accent-color:#06b6d4">
-        `;
-        list.appendChild(wrapper);
-      });
-      // Affiche la modale
-      document.getElementById('edit-modal-bg').classList.remove('hidden');
-      // On reset le preview images ajoutées
-      editPreview.innerHTML = '';
-      // Gestion du submit du form edit
-      document.getElementById('edit-form').onsubmit = async function(ev) {
-        ev.preventDefault();
-        // Images à garder :
-        const keep = [];
-        list.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => keep.push(cb.dataset.url));
-        document.getElementById('edit-keep-images').value = JSON.stringify(keep);
-        const form = new FormData(ev.target);
-        await fetch('/api/annonces_creees/' + id + '/edit', { method: 'POST', body: form });
-        document.getElementById('edit-modal-bg').classList.add('hidden');
-        ev.target.reset();
+      async function fetchAnnonces() {
+        showLoader(true);
+        const res = await fetch('/api/annonces');
+        const data = await res.json();
+        renderAnnonces('annonces-creees', data.creees, true);
+        renderAnnonces('annonces-publiees', data.publiees, false);
+        showLoader(false);
+      }
+      function renderAnnonces(id, annonces, canPublish) {
+        const el = document.getElementById(id);
+        el.innerHTML = '';
+        console.log('[DEBUG renderAnnonces]', id, annonces);
+        if (!annonces.length) {
+          el.innerHTML = `<div class=\"flex flex-col items-center justify-center h-40 text-center text-cyan-400 opacity-80 gap-2\">
+            <span style=\"font-size:2.2em;\">🔍🤷‍♂️</span>
+            <div class=\"text-lg font-bold\">Aucune annonce ici... 😅</div>
+            <div class=\"text-base text-cyan-200\">Ajoute ta première annonce avec le bouton ci-dessus ! 🚀</div>
+          </div>`;
+          return;
+        }
+        annonces.forEach((a, idx) => {
+          const box = document.createElement('div');
+          box.className = `fade-in bg-gray-700 p-3 rounded-xl shadow border border-cyan-700 flex flex-col gap-2 transition-transform duration-200 hover:-translate-y-1 hover:shadow-2xl${a.epingle ? ' epingle-glow' : ''}`;
+          // Génération des players YouTube
+          let youtubePlayers = '';
+          if ((a.youtubes || '').length > 0) {
+            youtubePlayers = (a.youtubes || '').split('\n').map(y => {
+              const id = (y.match(/(?:youtu.be\/|youtube.com\/(?:watch\?v=|embed\/|v\/|shorts\/)?)([\w-]{11})/) || [])[1];
+              if (!id) return '';
+              return `<div class='my-2'><iframe width='100%' height='220' style='border-radius:12px;box-shadow:0 2px 12px #ef444455;' src='https://www.youtube.com/embed/${id}' frameborder='0' allowfullscreen></iframe></div>`;
+            }).join('');
+          }
+          // Génération du conteneur carte unique par annonce (si adresses)
+          let mapDiv = '';
+          if ((a.adresses || '').trim().length > 0) {
+            const mapId = `map-${id}-${a.id}-${idx}`;
+            mapDiv = `<div class='my-2' style='height:260px; border-radius:14px; overflow:hidden; box-shadow:0 2px 12px #0ea5e955;'><div id='${mapId}' style='height:100%;width:100%'></div></div>`;
+            setTimeout(() => renderMapForAdresses(mapId, a.adresses), 100);
+          }
+          box.innerHTML = `
+            <div>
+              <div class="flex items-center gap-2">
+                ${a.epingle ? `<span class=\"inline-block bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full mr-2 animate-pulse\">📌 Épinglé</span>` : ""}
+                <div class="text-lg font-bold mb-1">${a.titre || ''} ${a.epingle ? '📌' : ''} 🗞️</div>
+              </div>
+              ${((a.tags || '').length > 0) ? `<div class=\"mb-1 text-pink-400\">🏷️ <span class=\"font-semibold\">Tags :</span> ${(a.tags || '').split(',').map(t => `#${t.trim()} 🎨`).join(' ')}</div>` : ''}
+              ${((a.lieux || '').length > 0) ? `<div class=\"mb-1 text-blue-400\">📍 <span class=\"font-semibold\">Lieux :</span> ${(a.lieux || '').split(',').map(l => `${l.trim()} 🗺️`).join(' ')}</div>` : ''}
+              ${((a.adresses || '').length > 0) ? `<div class=\"mb-1 text-cyan-300\">🏠 <span class=\"font-semibold\">Adresses :</span><br>${(a.adresses || '').split('\n').map(ad => `<span class=\"ml-4\">${ad} 🏢</span>`).join('<br>')}</div>` : ''}
+              ${mapDiv}
+              ${youtubePlayers}
+              <div class="text-gray-200 mb-2 whitespace-pre-line">${a.contenu || ''} ✏️</div>
+              ${(a.images && a.images.length > 0) ? `
+                <div class="flex gap-2 flex-wrap mb-2">
+                  ${a.images.map(url =>
+                    `<a href="${url}" target="_blank" class="img-popover">
+                       <img src="${url}" class="h-16 rounded shadow aspect-square object-cover hover:scale-125 transition thumb" alt="🖼️" />
+                     </a>`
+                  ).join('')}
+                </div>
+              ` : ''}
+            </div>
+            <div class="flex gap-2 mt-2">
+              ${canPublish ? `
+                <button onclick=\"publierAnnonce('${a.id}')\" class=\"bg-emerald-500 px-3 py-1 rounded-xl font-semibold shadow btn-action\">Publier</button>
+                <button onclick=\"editAnnonce('${a.id}')\" class=\"bg-blue-600 px-3 py-1 rounded-xl font-semibold shadow btn-action\">Modifier</button>
+                <button onclick=\"supprimerAnnonce('annonces-creees','${a.id}')\" class=\"bg-red-600 px-3 py-1 rounded-xl font-semibold shadow btn-action\">Supprimer</button>
+              ` : `
+                <button onclick=\"supprimerAnnonce('annonces-publiees','${a.id}')\" class=\"bg-red-600 px-3 py-1 rounded-xl font-semibold shadow btn-action\">Supprimer</button>
+              `}
+            </div>
+          `;
+          // Aperçu image popover
+          box.querySelectorAll('.img-popover').forEach(link => {
+            link.addEventListener('mouseenter', e => {
+              const pop = document.getElementById('popover-img');
+              pop.innerHTML = `<img src='${link.href}' style='max-width:320px;max-height:320px;border-radius:16px;' />`;
+              pop.classList.add('show');
+              pop.style.left = (e.clientX + 24) + 'px';
+              pop.style.top = (e.clientY - 40) + 'px';
+            });
+            link.addEventListener('mouseleave', () => {
+              const pop = document.getElementById('popover-img');
+              pop.classList.remove('show');
+              pop.innerHTML = '';
+            });
+          });
+          el.appendChild(box);
+        });
+      }
+      document.getElementById('annonce-form').onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          showLoader(true);
+          const formData = new FormData(e.target);
+          Array.from(imagesInput.files).forEach(f => formData.append('images', f));
+          formData.append('epingle', document.getElementById('epingle').checked ? 'on' : 'off');
+          formData.append('tags', document.getElementById('tags').value);
+          formData.append('lieux', document.getElementById('lieux').value);
+          formData.append('adresses', document.getElementById('adresses').value);
+          formData.append('youtubes', document.getElementById('youtubes').value);
+          const res = await fetch('/api/annonces', { method: 'POST', body: formData });
+          showLoader(false);
+          if (res.ok) {
+            showNotif('Annonce créée avec succès !', '#22c55e');
+            fetchAnnonces();
+            e.target.reset();
+            thumbs.innerHTML = '';
+          } else {
+            let msg = 'Erreur lors de la création de l\'annonce.';
+            try {
+              const err = await res.json();
+              if (err.detail) msg += ' ' + JSON.stringify(err.detail);
+            } catch {}
+            showNotif(msg, '#ef4444');
+          }
+        } catch (err) {
+          showLoader(false);
+          showNotif('Erreur JS : ' + (err && err.message ? err.message : err), '#ef4444');
+          console.error('[Form submit error]', err);
+        }
+      };
+      // --- Publication d'une annonce ---
+      window.publierAnnonce = async function(id) {
+        showLoader(true);
+        await fetch(`/api/annonces/${id}/publier`, { method: 'POST' });
+        showLoader(false);
+        showNotif('Annonce publiée !', '#0ea5e9');
         fetchAnnonces();
       }
-    }
-    // Fermer la popup édition
-    document.getElementById('close-edit-modal').onclick = function() {
-      document.getElementById('edit-modal-bg').classList.add('hidden');
-      document.getElementById('edit-form').reset();
-      editPreview.innerHTML = '';
-    }
+      // --- Suppression d'une annonce ---
+      window.supprimerAnnonce = async function(colonne, id) {
+        showLoader(true);
+        const el = document.querySelector(`[onclick*="supprimerAnnonce('${colonne}','${id}')"]`);
+        if (el) el.closest('.fade-in').classList.add('shake');
+        await fetch(`/api/annonces/${id}/supprimer`, { method: 'POST' });
+        showLoader(false);
+        showNotif('Annonce supprimée.', '#ef4444');
+        fetchAnnonces();
+      }
+      // --- Edition d'une annonce (popup modale) ---
+      let annonceEnCoursEdition = null;
+      window.editAnnonce = function(id) {
+        // Récupérer l'annonce à éditer
+        fetch('/api/annonces')
+          .then(res => res.json())
+          .then(data => {
+            const annonce = [...data.creees, ...data.publiees].find(a => String(a.id) === String(id));
+            if (!annonce) return;
+            annonceEnCoursEdition = annonce;
+            document.getElementById('edit-titre').value = annonce.titre;
+            document.getElementById('edit-contenu').value = annonce.contenu;
+            document.getElementById('edit-adresse').value = annonce.adresse || '';
+            document.getElementById('edit-youtube').value = annonce.youtube || '';
+            document.getElementById('edit-epingle').checked = !!annonce.epingle;
+            // Affiche les images existantes
+            const editThumbs = document.getElementById('edit-thumbs');
+            editThumbs.innerHTML = '';
+            (annonce.images || []).forEach(url => {
+              const img = document.createElement('img');
+              img.className = 'thumb';
+              img.src = url;
+              editThumbs.appendChild(img);
+            });
+            document.getElementById('edit-modal-bg').classList.remove('hidden');
+          });
+      }
+      document.getElementById('close-edit-modal').onclick = function() {
+        document.getElementById('edit-modal-bg').classList.add('hidden');
+        document.getElementById('edit-form').reset();
+        document.getElementById('edit-thumbs').innerHTML = '';
+        annonceEnCoursEdition = null;
+      }
+      // Drag & drop pour l'édition
+      const editDropzone = document.getElementById('edit-dropzone');
+      const editImagesInput = document.getElementById('edit-images');
+      editDropzone.addEventListener('click', () => editImagesInput.click());
+      editDropzone.addEventListener('dragover', e => { e.preventDefault(); editDropzone.classList.add('dragover'); });
+      editDropzone.addEventListener('dragleave', () => editDropzone.classList.remove('dragover'));
+      editDropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        editDropzone.classList.remove('dragover');
+        editImagesInput.files = e.dataTransfer.files;
+        showThumbs(editImagesInput.files, document.getElementById('edit-thumbs'));
+      });
+      editImagesInput.addEventListener('change', () => showThumbs(editImagesInput.files, document.getElementById('edit-thumbs')));
+      // Soumission du formulaire d'édition
+      document.getElementById('edit-form').onsubmit = async function(e) {
+        showLoader(true);
+        e.preventDefault();
+        if (!annonceEnCoursEdition) return;
+        const formData = new FormData();
+        formData.append('titre', document.getElementById('edit-titre').value);
+        formData.append('contenu', document.getElementById('edit-contenu').value);
+        formData.append('adresse', document.getElementById('edit-adresse').value);
+        formData.append('youtube', document.getElementById('edit-youtube').value);
+        Array.from(editImagesInput.files).forEach(f => formData.append('images', f));
+        formData.append('epingle', document.getElementById('edit-epingle').checked ? 'on' : 'off');
+        await fetch(`/api/annonces/${annonceEnCoursEdition.id}/edit`, { method: 'POST', body: formData });
+        showLoader(false);
+        showNotif('Annonce modifiée !', '#f59e42');
+        document.getElementById('edit-modal-bg').classList.add('hidden');
+        document.getElementById('edit-form').reset();
+        document.getElementById('edit-thumbs').innerHTML = '';
+        annonceEnCoursEdition = null;
+        fetchAnnonces();
+      }
 
-    fetchAnnonces();
-  </script>
-</body>
+      function showNotif(msg, color = '#06b6d4') {
+        const notif = document.getElementById('notif');
+        notif.textContent = msg;
+        notif.style.background = `linear-gradient(90deg, ${color}, #22d3ee)`;
+        notif.classList.add('show');
+        setTimeout(() => notif.classList.remove('show'), 2000);
+      }
+      function showLoader(show) {
+        document.getElementById('loader').style.display = show ? '' : 'none';
+      }
+
+      // Toggle options avancées
+      document.getElementById('toggle-advanced').onclick = function() {
+        const adv = document.getElementById('advanced-fields');
+        if (adv.style.display === 'none') {
+          adv.style.display = '';
+          adv.classList.add('advanced-anim');
+          this.textContent = '⬆️ Masquer les options avancées';
+        } else {
+          adv.style.display = 'none';
+          adv.classList.remove('advanced-anim');
+          this.textContent = '⚙️ Options avancées';
+        }
+      }
+      // Fonction Leaflet + géocodage Nominatim
+      async function renderMapForAdresses(mapId, adressesStr) {
+        const adresses = (adressesStr || '').split('\n').map(a => a.trim()).filter(Boolean);
+        if (!adresses.length) return;
+        const map = L.map(mapId).setView([50.176, 3.234], 12); // Cambrai par défaut
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap',
+          maxZoom: 19
+        }).addTo(map);
+        for (const adresse of adresses) {
+          try {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adresse)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data && data[0]) {
+              const { lat, lon } = data[0];
+              L.marker([lat, lon]).addTo(map).bindPopup(adresse);
+              map.setView([lat, lon], 13);
+            }
+          } catch (e) { /* ignore */ }
+        }
+      }
+    </script>
+  </body>
 </html>

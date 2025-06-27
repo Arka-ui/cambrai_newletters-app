@@ -4,48 +4,56 @@ import UIKit
 
 // Modèle d'annonce (garde tout)
 struct AnnonceAPI: Identifiable, Codable, Equatable {
-    let id: Int
+    let id: String
     let titre: String
     let contenu: String
-    let images: [String]
+    let images: [String] // Contiendra des URLs directes
     let youtube: String?
     let adresse: String?
+    let tags: String?
+    let lieux: String?
+    let adresses: String?
+    let youtubes: String?
 }
 
 class AnnoncesViewModel: ObservableObject {
     @Published var annonces: [AnnonceAPI] = []
     @Published var isLoading = false
-    
-    // ==== CORRECTION : Set<Int> et plus Set<String>
-    private var lastAnnoncesIDs: Set<Int> = []
-    private var lastFetchDate: Date? = nil
-    
-    // À changer selon ton endpoint
-    let apiURL = URL(string: "https://fca3-92-175-138-153.ngrok-free.app/api/annonces_publiees")!
+    private var lastAnnoncesIDs: Set<String> = []
     
     init() {
         fetchAnnonces()
     }
     
-    /// Récupère les annonces depuis l'API (appelé à l'init ou manuellement)
+    /// Récupère les annonces depuis l'API distante (FastAPI, nouvelle URL)
     func fetchAnnonces(completion: (([AnnonceAPI]) -> Void)? = nil) {
-        guard !isLoading else { return }
         isLoading = true
-        let task = URLSession.shared.dataTask(with: apiURL) { [weak self] data, response, error in
-            defer { DispatchQueue.main.async { self?.isLoading = false } }
-            guard let data = data, error == nil else { return }
-            let decoder = JSONDecoder()
-            if let nouvelles = try? decoder.decode([AnnonceAPI].self, from: data) {
-                DispatchQueue.main.async {
-                    let newIDs = Set(nouvelles.map { $0.id })
-                    if !self!.lastAnnoncesIDs.isEmpty && newIDs != self!.lastAnnoncesIDs {
-                        self?.sendNotifIfNeeded(oldIDs: self!.lastAnnoncesIDs, newAnnonces: nouvelles)
-                    }
-                    self?.annonces = nouvelles
-                    self?.lastAnnoncesIDs = newIDs
-                    self?.lastFetchDate = Date()
-                    completion?(nouvelles)
+        guard let url = URL(string: "https://amusing-eagle-kindly.ngrok-free.app/api/annonces") else { return }
+        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                guard let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let publiees = json["publiees"] as? [[String: Any]] else {
+                    self.annonces = []
+                    return
                 }
+                self.annonces = publiees.compactMap { dict in
+                    guard let id = dict["id"] as? Int else { return nil }
+                    return AnnonceAPI(
+                        id: String(id),
+                        titre: dict["titre"] as? String ?? "",
+                        contenu: dict["contenu"] as? String ?? "",
+                        images: dict["images"] as? [String] ?? [],
+                        youtube: dict["youtube"] as? String,
+                        adresse: dict["adresse"] as? String,
+                        tags: dict["tags"] as? String,
+                        lieux: dict["lieux"] as? String,
+                        adresses: dict["adresses"] as? String,
+                        youtubes: dict["youtubes"] as? String
+                    )
+                }
+                completion?(self.annonces)
             }
         }
         task.resume()
@@ -67,36 +75,15 @@ class AnnoncesViewModel: ObservableObject {
             } else {
                 completion?(.noData)
             }
-            self.annonces = newAnnonces
             self.lastAnnoncesIDs = newIDs
         }
     }
     
-    // ========== Notifications locales ==========
     private func sendNotificationForNewAnnonces(count: Int) {
         let content = UNMutableNotificationContent()
-        content.title = "Nouvelle(s) annonce(s) !"
-        content.body = "Il y a \(count) nouvelle(s) annonce(s) depuis ta dernière visite."
-        content.sound = .default
+        content.title = "Nouvelles annonces !"
+        content.body = "Il y a \(count) nouvelle(s) annonce(s) à découvrir."
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
-    }
-    
-    // ==== CORRECTION : oldIDs est Set<Int> et on compare à id (Int)
-    private func sendNotifIfNeeded(oldIDs: Set<Int>, newAnnonces: [AnnonceAPI]) {
-        let newOnly = newAnnonces.filter { !oldIDs.contains($0.id) }
-        guard !newOnly.isEmpty else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "Nouvelles annonces"
-        if newOnly.count == 1 {
-            content.body = newOnly.first?.titre ?? "Nouvelle annonce !"
-        } else {
-            content.body = "\(newOnly.count) nouvelles annonces publiées !"
-        }
-        content.sound = .default
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        // ==== CORRECTION : ID doit être String (donc String(id) si jamais tu veux mettre l'ID, ici UUID pour éviter doublons)
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 }

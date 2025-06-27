@@ -5,14 +5,14 @@ import UserNotifications
 class AppDelegate: UIResponder, UIApplicationDelegate {
     let taskIdentifier = "com.arka.cambrai.fetchAnnonces"
     
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Enregistre la tâche de fond
         BGTaskScheduler.shared.register(forTaskWithIdentifier: taskIdentifier, using: nil) { task in
             self.handleAppRefresh(task: task as! BGAppRefreshTask)
         }
         // Demande la permission de notif
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            print("Notifications autorisées: \(granted)")
+            // print("Notifications autorisées: \(granted)") // Nettoyage
         }
         scheduleAppRefresh() // Programme la première tâche
         return true
@@ -39,11 +39,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// Programme un refresh dans 30 minutes
     func scheduleAppRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: taskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 1800)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 1800) // 30 min
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
-            print("Erreur lors de la programmation du background fetch : \(error)")
+            // print("Impossible de programmer la tâche de fond: \(error)") // Nettoyage
         }
     }
 }
